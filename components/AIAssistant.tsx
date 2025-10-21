@@ -92,7 +92,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ wallets, categories, onAddTra
            {messages.length === 0 && !isLoading && (
                <div className="text-center text-gray-500 dark:text-gray-400 h-full flex flex-col justify-center items-center">
                    <SparklesIcon className="w-16 h-16 mb-4 text-gray-300 dark:text-gray-600"/>
-                   <p className="font-semibold">Welcome to FinTrack AI</p>
+                   <p className="font-semibold">Welcome to AivoFinance AI</p>
                    <p className="text-sm">You can add a transaction or ask me anything about your finances.</p>
                    <p className="text-xs mt-4">e.g., "Spent 50 on lunch" or "What were my top 3 expenses this month?"</p>
                </div>

@@ -1,153 +1,88 @@
-import { getAccessToken } from './googleAuthService';
 import { AppData } from '../types';
 
-const APP_DATA_FILE_NAME = 'fintrack_data.json';
-const DRIVE_API_URL = 'https://www.googleapis.com/drive/v3/files';
-const DRIVE_UPLOAD_URL = 'https://www.googleapis.com/upload/drive/v3/files';
+export const APP_DATA_FILE_NAME = 'aivofinance_data.json';
 
-// --- Helper Functions ---
-const getAuthHeaders = (): Headers => {
-    const accessToken = getAccessToken();
-    if (!accessToken) {
-        throw new Error('User not authenticated');
-    }
-    const headers = new Headers();
-    headers.append('Authorization', `Bearer ${accessToken}`);
-    headers.append('Content-Type', 'application/json');
-    return headers;
-};
+// --- MOCK in-memory storage ---
+// This simulates Google's appDataFolder by storing one file's content.
+let mockFileStorage: { [id: string]: string } = {}; // { fileId: fileContent (JSON string) }
+let mockFileId: string | null = null;
 
-// --- Core API Functions ---
+const SIMULATED_LATENCY = 500; // ms
+
+// Helper to simulate network delay
+const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+
+
+// --- Core API Functions (Mocked) ---
 
 /**
- * Finds the application's data file in the user's AppData folder.
+ * Finds the application's data file in the mock storage.
  * @returns The file ID if found, otherwise null.
  */
-const findFile = async (): Promise<string | null> => {
-    const headers = getAuthHeaders();
-    headers.delete('Content-Type'); // Not needed for this GET request
-
-    const queryParams = new URLSearchParams({
-        spaces: 'appDataFolder',
-        fields: 'files(id, name)',
-        q: `name='${APP_DATA_FILE_NAME}'`,
-    });
-
-    try {
-        const response = await fetch(`${DRIVE_API_URL}?${queryParams}`, { headers });
-        if (!response.ok) {
-            throw new Error(`Google Drive API error: ${response.statusText}`);
-        }
-        const data = await response.json();
-        return data.files.length > 0 ? data.files[0].id : null;
-    } catch (error) {
-        console.error("Error finding file in Google Drive:", error);
-        throw error;
-    }
+export const findFile = async (): Promise<string | null> => {
+    await delay(SIMULATED_LATENCY);
+    console.log("MOCK_DRIVE: finding file...", { mockFileId });
+    return mockFileId;
 };
 
 /**
- * Creates the initial data file in the user's AppData folder.
+ * Creates the initial data file in the mock storage.
  * @param content The initial AppData object to store.
  * @returns The ID of the newly created file.
  */
-const createFile = async (content: AppData): Promise<string> => {
-    const accessToken = getAccessToken();
-    if (!accessToken) throw new Error('Not authenticated');
-
-    const metadata = {
-        name: APP_DATA_FILE_NAME,
-        parents: ['appDataFolder'],
-    };
-
-    const formData = new FormData();
-    formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-    formData.append('file', new Blob([JSON.stringify(content, null, 2)], { type: 'application/json' }));
-
-    const response = await fetch(`${DRIVE_UPLOAD_URL}?uploadType=multipart`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${accessToken}` },
-        body: formData,
-    });
-
-    if (!response.ok) {
-        throw new Error(`Google Drive API error during file creation: ${response.statusText}`);
+export const createFile = async (content: AppData): Promise<string> => {
+    await delay(SIMULATED_LATENCY);
+    if (mockFileId) {
+        console.warn("MOCK_DRIVE: createFile called but file already exists.");
+        throw new Error("File already exists");
     }
-
-    const data = await response.json();
-    return data.id;
+    const newFileId = `mock_file_id_${Date.now()}`;
+    mockFileStorage[newFileId] = JSON.stringify(content, null, 2);
+    mockFileId = newFileId;
+    console.log("MOCK_DRIVE: created file", { newFileId });
+    return newFileId;
 };
 
 /**
- * Reads the content of the data file from Google Drive.
+ * Reads the content of the data file from mock storage.
  * @param fileId The ID of the file to read.
  * @returns The parsed AppData object.
  */
-const readFile = async (fileId: string): Promise<AppData> => {
-    const headers = getAuthHeaders();
-    headers.delete('Content-Type');
-
-    const response = await fetch(`${DRIVE_API_URL}/${fileId}?alt=media`, { headers });
-     if (!response.ok) {
-        throw new Error(`Google Drive API error reading file: ${response.statusText}`);
+export const readFile = async (fileId: string): Promise<AppData> => {
+    await delay(SIMULATED_LATENCY);
+    if (!mockFileStorage[fileId]) {
+        throw new Error("File not found");
     }
-    return response.json();
+    console.log("MOCK_DRIVE: reading file", { fileId });
+    return JSON.parse(mockFileStorage[fileId]);
 };
 
 /**
- * Updates the content of the data file in Google Drive.
+ * Updates the content of the data file in mock storage.
  * @param fileId The ID of the file to update.
  * @param content The new AppData object to save.
  */
-const updateFile = async (fileId: string, content: AppData): Promise<void> => {
-    const headers = getAuthHeaders();
-    
-    await fetch(`${DRIVE_UPLOAD_URL}/${fileId}?uploadType=media`, {
-        method: 'PATCH',
-        headers,
-        body: JSON.stringify(content, null, 2),
-    });
+export const updateFile = async (fileId: string, content: AppData): Promise<void> => {
+    await delay(SIMULATED_LATENCY / 2); // Make saving faster
+    if (!mockFileStorage[fileId]) {
+        throw new Error("File not found");
+    }
+    mockFileStorage[fileId] = JSON.stringify(content, null, 2);
+    console.log("MOCK_DRIVE: updated file", { fileId });
 };
 
 
-// --- Public Service Interface ---
-
-let fileIdCache: string | null = null;
-
-export const getAppData = async (initialData: AppData): Promise<AppData> => {
-    try {
-        const fileId = await findFile();
-        if (fileId) {
-            fileIdCache = fileId;
-            console.log("Found existing data file in Google Drive.");
-            return await readFile(fileId);
-        } else {
-            console.log("No data file found. Creating a new one with sample data.");
-            fileIdCache = await createFile(initialData);
-            return initialData;
-        }
-    } catch (error) {
-        console.error("Failed to get app data from Google Drive. Using initial data as fallback.", error);
-        return initialData;
+/**
+ * Creates a copy of a file in mock storage.
+ * @param fileId The ID of the file to copy.
+ * @param newName The name for the copied file (not used in this simplified mock).
+ */
+export const copyFile = async (fileId: string, newName: string): Promise<void> => {
+     await delay(SIMULATED_LATENCY);
+     if (!mockFileStorage[fileId]) {
+        throw new Error("File to copy not found");
     }
-};
-
-export const saveAppData = async (data: AppData): Promise<void> => {
-    if (!fileIdCache) {
-        // This case should ideally not happen if getAppData is always called first.
-        const fileId = await findFile();
-        if (fileId) {
-            fileIdCache = fileId;
-        } else {
-            console.error("Cannot save data: file ID not found.");
-            throw new Error("File not initialized in Google Drive.");
-        }
-    }
-    
-    try {
-        await updateFile(fileIdCache, data);
-        console.log("App data successfully saved to Google Drive.");
-    } catch (error) {
-        console.error("Failed to save app data to Google Drive:", error);
-    }
+    const newId = `mock_backup_id_${Date.now()}`;
+    mockFileStorage[newId] = mockFileStorage[fileId]; // Just copy content to a new ID
+    console.log(`MOCK_DRIVE: Copied file ${fileId} to ${newId} (as ${newName})`);
 };

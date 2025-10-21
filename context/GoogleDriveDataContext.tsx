@@ -1,104 +1,122 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { AppData } from '../types';
-import { getAppData, saveAppData } from '../services/googleDriveService';
-import { Spinner } from '../components/Spinner';
-
-// This data is used only to create categories for a new user.
-// Wallets and settings are created in the WelcomeScreen.
-const sampleCategories = { 
-    INCOME: ['Salary', 'Freelance', 'Transfer', 'Loan', 'Other'], 
-    EXPENSE: ['Groceries', 'Transport', 'Entertainment', 'Utilities', 'Subscriptions', 'Transfer', 'Investment', 'Check Payment', 'Shopping', 'Rent', 'Other'] 
-};
-const newUserData: AppData = {
-    transactions: [],
-    wallets: [],
-    categories: sampleCategories,
-    debts: [],
-    subscriptions: [],
-    assets: [],
-    fixedDeposits: [],
-    checks: [],
-    budgets: [],
-    goals: [],
-};
-// --- END OF SAMPLE DATA ---
+import { findFile, readFile, updateFile, createFile } from '../services/googleDriveService';
+import { handleDataMigration } from '../services/versionService';
+import { INITIAL_DATA } from '../utils/constants';
 
 interface GoogleDriveDataContextType {
-    data: AppData;
-    isLoading: boolean;
-    error: Error | null;
-    baseCurrency: string;
-    updateData: (updatedData: Partial<AppData>) => void;
+  appData: AppData | null;
+  isLoading: boolean;
+  isSaving: boolean;
+  error: string | null;
+  saveData: (newData: AppData) => Promise<void>;
+  baseCurrency: string;
+  setBaseCurrencyAndInit: (currency: string) => Promise<void>;
 }
 
 const GoogleDriveDataContext = createContext<GoogleDriveDataContextType | undefined>(undefined);
 
 export const GoogleDriveDataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    const [data, setData] = useState<AppData | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<Error | null>(null);
-
-    useEffect(() => {
-        const loadData = async () => {
-            setIsLoading(true);
-            setError(null);
-            try {
-                const appData = await getAppData(newUserData);
-                setData(appData);
-            } catch (err) {
-                setError(err instanceof Error ? err : new Error('Failed to load data'));
-                setData(newUserData); // Fallback to initial data on error
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
-        loadData();
-    }, []);
-
-    const updateData = useCallback((updatedData: Partial<AppData>) => {
-        setData(prevData => {
-            if (!prevData) return null;
-            const newData = { ...prevData, ...updatedData };
-            // Save to Google Drive asynchronously without blocking UI updates
-            saveAppData(newData).catch(err => {
-                console.error("Failed to save data to Google Drive:", err);
-                // Here you might want to set an error state to notify the user
-            });
-            return newData;
-        });
-    }, []);
-
-    if (isLoading || !data) {
-        return (
-            <div className="flex items-center justify-center h-screen bg-gray-100 dark:bg-gray-900">
-                <div className="text-center">
-                    <Spinner size="lg" />
-                    <p className="mt-4 text-lg font-semibold text-gray-700 dark:text-gray-300">Syncing with Google Drive...</p>
-                </div>
-            </div>
-        );
+  const [appData, setAppData] = useState<AppData | null>(null);
+  const [fileId, setFileId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  
+  const loadData = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      let id = await findFile();
+      if (id) {
+        let data = await readFile(id);
+        // Run migration check
+        const migratedData = await handleDataMigration(id, data);
+        if (migratedData.version !== data.version) {
+            // if migration happened, save the updated data back.
+            await updateFile(id, migratedData);
+        }
+        setAppData(migratedData);
+        setFileId(id);
+      } else {
+        // File not found, implies first-time user who needs setup.
+        setAppData(null);
+      }
+    } catch (err: any) {
+      console.error("Error loading data from Google Drive:", err);
+      setError('Failed to load your financial data. Please try refreshing the page.');
+    } finally {
+      setIsLoading(false);
     }
-    
-    const contextValue = {
-        data: data, 
-        isLoading, 
-        error, 
-        baseCurrency: data.userSettings?.baseCurrency || 'USD', // Default to USD if not set
-        updateData 
-    };
+  }, []);
 
-    return (
-        <GoogleDriveDataContext.Provider value={contextValue}>
-            {children}
-        </GoogleDriveDataContext.Provider>
-    );
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const saveData = async (newData: AppData) => {
+    if (!fileId) {
+      console.error("Cannot save data, file ID is missing.");
+      setError("Could not save data: file not found on Google Drive.");
+      return;
+    }
+    setIsSaving(true);
+    setError(null);
+    // Debounce saving
+    setTimeout(async () => {
+      try {
+        await updateFile(fileId, newData);
+        setAppData(newData);
+      } catch (err) {
+        console.error("Error saving data:", err);
+        setError("Failed to save your data. Please check your connection and try again.");
+      } finally {
+        setIsSaving(false);
+      }
+    }, 500); // 500ms debounce
+  };
+
+  const setBaseCurrencyAndInit = async (currency: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+        const initialCurrencies = [...INITIAL_DATA.currencies];
+        if (!initialCurrencies.includes(currency)) {
+            initialCurrencies.push(currency);
+            initialCurrencies.sort();
+        }
+
+        const initialData: AppData = {
+            ...INITIAL_DATA,
+            currencies: initialCurrencies,
+            settings: {
+                baseCurrency: currency,
+            },
+        };
+        const newFileId = await createFile(initialData);
+        setFileId(newFileId);
+        setAppData(initialData);
+    } catch (err: any) {
+        console.error("Error initializing data:", err);
+        setError("Could not create your data file. Please try again.");
+    } finally {
+        setIsLoading(false);
+    }
+  };
+
+  const baseCurrency = appData?.settings.baseCurrency || 'USD';
+
+  return (
+    <GoogleDriveDataContext.Provider value={{ appData, isLoading, isSaving, error, saveData, baseCurrency, setBaseCurrencyAndInit }}>
+      {children}
+    </GoogleDriveDataContext.Provider>
+  );
 };
 
-export const useGoogleDriveData = () => {
-    const context = useContext(GoogleDriveDataContext);
-    if (context === undefined) {
-        throw new Error('useGoogleDriveData must be used within a GoogleDriveDataProvider');
-    }
-    return context;
+export const useGoogleDriveData = (): GoogleDriveDataContextType => {
+  const context = useContext(GoogleDriveDataContext);
+  if (context === undefined) {
+    throw new Error('useGoogleDriveData must be used within a GoogleDriveDataProvider');
+  }
+  return context;
 };

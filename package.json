@@ -1,5 +1,5 @@
 {
-  "name": "gemini-personal-finance-tracker",
+  "name": "aivofinance-0.1",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -13,7 +13,8 @@
     "recharts": "^3.3.0",
     "@google/genai": "^1.25.0",
     "react-dom": "^19.2.0",
-    "react-markdown": "^10.1.0"
+    "react-markdown": "^10.1.0",
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

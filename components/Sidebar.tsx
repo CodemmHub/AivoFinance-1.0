@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { DashboardIcon } from './icons/DashboardIcon';
 import { ListIcon } from './icons/ListIcon';
 import { SparklesIcon } from './icons/SparklesIcon';
@@ -13,6 +13,7 @@ import { LogoutIcon } from './icons/LogoutIcon';
 import { ChartBarIcon } from './icons/ChartBarIcon';
 import { ScaleIcon } from './icons/ScaleIcon';
 import { FlagIcon } from './icons/FlagIcon';
+import { ArrowUpOnSquareIcon } from './icons/ArrowUpOnSquareIcon';
 
 type NavItemProps = {
   icon: React.ReactNode;
@@ -43,13 +44,41 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, onLogout, userEmail }) => {
+  const [shareText, setShareText] = useState('Share App');
+
+  const handleShare = async () => {
+    const shareData = {
+      title: 'AivoFinance',
+      text: 'Check out this personal finance app!',
+      url: window.location.href,
+    };
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+      } catch (error) {
+        console.error('Error sharing:', error);
+      }
+    } else {
+      // Fallback for browsers that do not support the Web Share API
+      try {
+        await navigator.clipboard.writeText(window.location.href);
+        setShareText('Link Copied!');
+        setTimeout(() => setShareText('Share App'), 2000);
+      } catch (error) {
+        console.error('Error copying to clipboard:', error);
+        alert('Could not copy link to clipboard.');
+      }
+    }
+  };
+
   return (
     <aside className="w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 p-4 flex flex-col">
       <div className="flex items-center mb-8">
         <div className="p-2 bg-blue-600 rounded-lg mr-3">
           <BanknotesIcon className="w-6 h-6 text-white" />
         </div>
-        <h1 className="text-xl font-bold text-gray-800 dark:text-white">FinTrack</h1>
+        <h1 className="text-xl font-bold text-gray-800 dark:text-white">AivoFinance</h1>
       </div>
       <nav className="flex-grow space-y-2">
         <NavItem
@@ -139,8 +168,15 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, onLogout
             <p className="text-xs text-gray-500 dark:text-gray-400">Signed In</p>
         </div>
         <button
+          onClick={handleShare}
+          className="flex items-center w-full px-4 py-2.5 text-sm font-medium rounded-lg text-gray-600 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+        >
+          <ArrowUpOnSquareIcon className="w-5 h-5 mr-3" />
+          <span>{shareText}</span>
+        </button>
+        <button
           onClick={onLogout}
-          className="flex items-center w-full px-4 py-2.5 text-sm font-medium rounded-lg text-gray-600 dark:text-gray-300 hover:bg-red-100 dark:hover:bg-red-900/50 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+          className="flex items-center w-full px-4 py-2.5 text-sm font-medium rounded-lg text-gray-600 dark:text-gray-300 hover:bg-red-100 dark:hover:bg-red-900/50 hover:text-red-600 dark:hover:text-red-400 transition-colors mt-1"
         >
           <LogoutIcon className="w-5 h-5 mr-3" />
           <span>Logout</span>

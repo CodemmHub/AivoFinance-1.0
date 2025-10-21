@@ -1,5 +1,6 @@
+
 import { FunctionDeclaration, GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
-import { Transaction, Wallet, Categories, TransactionType } from "../types";
+import { Transaction, Wallet, Categories, TransactionType } from "../types.js";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 const model = "gemini-2.5-flash";
@@ -49,7 +50,7 @@ export const getAIAssistantResponse = async (
         netWorth: allData.netWorth, // Assuming net worth is pre-calculated and passed in
     };
     
-    const systemInstruction = `You are a helpful and friendly personal finance assistant named FinTrack AI. Your goal is to help the user manage their finances.
+    const systemInstruction = `You are a helpful and friendly personal finance assistant named AivoFinance AI. Your goal is to help the user manage their finances.
 
 You have two main capabilities:
 1.  **Add Transactions:** If the user's message is clearly stating a transaction they want to record (e.g., "I bought coffee for 5", "received 2000 salary"), you MUST call the \`addTransaction\` function with the extracted details.

@@ -28,7 +28,7 @@ const Auth: React.FC = () => {
                     <div className="p-3 bg-blue-600 rounded-full mb-4">
                         <BanknotesIcon className="w-8 h-8 text-white" />
                     </div>
-                    <h2 className="text-3xl font-bold text-gray-800 dark:text-white">Welcome to FinTrack</h2>
+                    <h2 className="text-3xl font-bold text-gray-800 dark:text-white">Welcome to AivoFinance</h2>
                     <p className="text-gray-600 dark:text-gray-400 mt-2">Your personal finance companion.</p>
                 </div>
 
